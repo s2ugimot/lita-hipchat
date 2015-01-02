@@ -95,6 +95,26 @@ module Lita
           end
         end
 
+        def register_reconnection_handler(proc, reconnect_delay)
+          client.on_exception do |exception, stream, where_it_happened|
+            # multiple exception may raise simultaniously on connection lost
+            # identify each with Thread id
+            thread_id = Thread.current.object_id.to_s(36)
+            Lita.logger.info "Thread: #{thread_id}: Caught exception: #{exception}"
+            begin
+              Lita.logger.info "Thread: #{thread_id}: Sleeping #{reconnect_delay} second(s)..."
+              sleep reconnect_delay
+              Lita.logger.info "Thread: #{thread_id}: Trying to reconnect..."
+              proc.call
+            rescue
+              # never give up until reconnection succeed
+              Lita.logger.info "Thread: #{thread_id}: Caught exception when reconnecting: #{$!}"
+              Lita.logger.info "Thread: #{thread_id}: Retry."
+              retry
+            end
+          end
+        end
+
         def shut_down
           Lita.logger.info("Disconnecting from HipChat.")
           client.close
